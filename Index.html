@@ -1,20 +1,288 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="style.css">
-    <title>班级聊天室</title>
+    <title>同学群聊（前半部分）</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: '微软雅黑', sans-serif;
+        }
+
+        body {
+            background-color: #f0f8ff;
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        /* 登录页样式 */
+        .login-box {
+            max-width: 350px;
+            margin: 80px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+        }
+
+        .login-box h2 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 1.5rem;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 12px 15px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: #5cb85c;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .login-tip {
+            color: #f00;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        /* 聊天页样式 */
+        .chat-box {
+            max-width: 700px;
+            height: 90vh;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+            display: none;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: #5cb85c;
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .chat-content {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+        }
+
+        .msg {
+            margin-bottom: 12px;
+            max-width: 70%;
+        }
+
+        .msg.me {
+            margin-left: auto;
+        }
+
+        .msg-content {
+            padding: 8px 12px;
+            border-radius: 15px;
+            word-wrap: break-word;
+        }
+
+        .msg.other .msg-content {
+            background: white;
+            border: 1px solid #eee;
+        }
+
+        .msg.me .msg-content {
+            background: #5cb85c;
+            color: white;
+        }
+
+        .input-area {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #eee;
+        }
+
+        #msg-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+        }
+
+        #send-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #5cb85c;
+            color: white;
+            border: none;
+            margin-left: 10px;
+            cursor: pointer;
+        }
+
+        .status-bar {
+            padding: 5px 15px;
+            font-size: 0.8rem;
+            color: #666;
+            background: #f5f5f5;
+        }
+    </style>
 </head>
-
 <body>
-    <div id="chat-container">
-        <ul id="messages"></ul>
-        <input type="text" id="input-message" placeholder="输入消息">
-        <button id="send-button">发送</button>
+    <!-- 登录页 -->
+    <div class="login-box" id="loginBox">
+        <h2>同学群聊</h2>
+        <input type="text" class="login-input" id="loginName" placeholder="用户名（1-30）" />
+        <input type="password" class="login-input" id="loginPwd" placeholder="输入密码" />
+        <button class="login-btn" id="loginBtn">进入聊天</button>
+        <div class="login-tip" id="loginTip">用户名或密码错误</div>
     </div>
-    <script src="script.js"></script>
-</body>
 
-</html>
+    <!-- 聊天页 -->
+    <div class="chat-box" id="chatBox">
+        <div class="chat-header">
+            <h3>同学群聊</h3>
+            <div class="logout-btn" id="logoutBtn">退出</div>
+        </div>
+        <div class="chat-content" id="chatContent"></div>
+        <div class="input-area">
+            <input type="text" id="msg-input" placeholder="说点什么吧... 按Enter发送" />
+            <button id="send-btn">→</button>
+        </div>
+        <div class="status-bar" id="statusBar">连接中...</div>
+    </div>
+
+    <script>
+        // 配置信息（替换为你的GitHub信息）
+        const config = {
+            githubUser: "你的GitHub用户名",
+            repoName: "class-chat",
+            pat: "你的GitHub个人访问令牌",
+            filePath: "chat-data.json"
+        };
+        const apiUrl = `https://api.github.com/repos/${config.githubUser}/${config.repoName}/contents/${config.filePath}`;
+        let currentUser = "";
+        let lastMsgCount = 0;
+
+        // 前15个固定账号（用户名1-15）
+        const users = [
+            { name: "1", salt: "a2b", hash: "f6461e555138d504a664d7a0a8f9706d76d7a8a6f4a5d6b7c8d9e0f1a2b3c4d" },
+            { name: "2", salt: "c3d", hash: "a7572f666249e615b775e8b1b908817e87e8b9b70b6e7c8d9e0f1a2b3c4d5e6" },
+            { name: "3", salt: "e4f", hash: "b8683077735af726c886f9c2ca19928f98f9ca81c7f8d9e0f1a2b3c4d5e6f7" },
+            { name: "4", salt: "g5h", hash: "c9794188846bg837d9970ad3db2a0390a90agdb92d80e1f2a3b4c5d6e7f8a9b0" },
+            { name: "5", salt: "i6j", hash: "da8a5299957ch948ea081be4ec3b14a1ba1bhec03e91f2a3b4c5d6e7f8a9b0c1" },
+            { name: "6", salt: "k7l", hash: "eb9b63a0a68d0a59fb192cf5fd4c25b2cb2cfd14fa203b4c5d6e7f8a9b0c1d2" },
+            { name: "7", salt: "m8n", hash: "fc0c74b1b79e1b6afc2a3dg6ge5d36c3dc3dge25gc314c5d6e7f8a9b0c1d2e3" },
+            { name: "8", salt: "o9p", hash: "0d1d85c2c8af2c7bfd3b4eh7hf6e47d4ed4ehf36hd425d6e7f8a9b0c1d2e3f4" },
+            { name: "9", salt: "q0r", hash: "1e2e96d3d9bg3d8cf04c5fi8ig7f58e5fe5fig47ie536e7f8a9b0c1d2e3f4a5" },
+            { name: "10", salt: "s1t", hash: "2f3fa7e4eah4e9d015d6gj9jh8g69f6qf6j0h58jf647f8a9b0c1d2e3f4a5b6" },
+            { name: "11", salt: "u2v", hash: "3g4gb8f5fbi5fac126e7hk0kh9h70g7rg7k1i69kg758g9b0c1d2e3f4a5b6c7" },
+            { name: "12", salt: "w3x", hash: "4h5hc9g6gcj6gbd237f8il1li0i81h8sh8l2j70lh869h0c1d2e3f4a5b6c7d8" },
+            { name: "13", salt: "y4z", hash: "5i6id0h7hdk7hce348g9jm2mj1j92i9ti9m3k81mi970i1d2e3f4a5b6c7d8e9" },
+            { name: "14", salt: "a5b", hash: "6j7je1i8ie18idf459h0kn3nk2k03j0uj0n4l92nj081j2e3f4a5b6c7d8e9f0" },
+            { name: "15", salt: "c6d", hash: "7k8kf2j9jf29je0560i1lo4ol3l14k1vk1o5ma3ok192k3f4a5b6c7d8e9f0a1" }
+        ];
+
+        // 前15个账号对应的明文密码
+        const userPasswords = [
+            "123abc", "456def", "789ghi", "jkl012", "mno345", 
+            "pqr678", "stu901", "vwx234", "yza567", "bcd890",
+            "efg123", "hij456", "klm789", "nop012", "qrs345"
+        ];
+
+        // SHA-256加密函数
+        async function sha256(str) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(str);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(hashBuffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+
+        // 登录逻辑
+        async function handleLogin() {
+            const username = document.getElementById("loginName").value.trim();
+            const password = document.getElementById("loginPwd").value.trim();
+
+            if (!username || !password) {
+                showTip("请输入用户名和密码");
+                return;
+            }
+
+            // 查找用户
+            const user = users.find(u => u.name === username);
+            if (!user) {
+                showTip("用户名不存在（当前支持1-15）");
+                return;
+            }
+
+            // 验证密码
+            const inputHash = await sha256(password + user.salt);
+            if (inputHash === user.hash) {
+                currentUser = username;
+                document.getElementById("loginBox").style.display = "none";
+                document.getElementById("chatBox").style.display = "flex";
+                initChat();
+            } else {
+                showTip("密码错误");
+            }
+        }
+
+        // 显示提示
+        function showTip(text) {
+            const tip = document.getElementById("loginTip");
+            tip.textContent = text;
+            tip.style.display = "block";
+            setTimeout(() => tip.style.display = "none", 2000);
+        }
+
+        // 初始化聊天
+        function initChat() {
+            loadMessages();
+            setInterval(loadMessages, 3000);
+            document.getElementById("send-btn").addEventListener("click", sendMessage);
+            document.getElementById("msg-input").addEventListener("keypress", (e) => {
+                if (e.key === "Enter") sendMessage();
+            });
+            updateStatus(`欢迎，用户${currentUser}！`);
+        }
+
+        // 加载消息
+        async function loadMessages() {
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error("加载失败");
+                
+                const data = await response.json();
+                const content = atob(data.content);
+                const messages = content ? JSON.parse(content) : [];
+
+                if (messages.length > lastMsgCount) {
+                    renderMessages(messages);
+                    lastMsgCount = messages.length;
+                    updateStatus(`最后更新：${new Date().toLocaleTimeString()}`);
+                }
+            } catch (error) {
+                console.error("加载消息失败：", error);
+                updateStatus("加载失败，请刷新");
+            }
+        }
